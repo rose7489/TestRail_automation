@@ -51,7 +51,7 @@ def get_code_changes(repo_path, base_sha, head_sha):
         os.chdir(original_dir)
 
 
-def generate_test_cases(code_diff, api_key):
+def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-7a119cfa7886"):
     """
     Send code changes to watsonx.ai to generate test cases
     
@@ -62,7 +62,7 @@ def generate_test_cases(code_diff, api_key):
     Returns:
         JSON response from watsonx.ai
     """
-    url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation"
+    url = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation?version=2024-05-31"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -84,6 +84,7 @@ def generate_test_cases(code_diff, api_key):
     data = {
         "model_id": "ibm/granite-13b-instruct-v2",
         "input": prompt,
+        "project_id": project_id,
         "parameters": {
             "temperature": 0.7,
             "max_new_tokens": 1024
@@ -228,6 +229,8 @@ def parse_arguments():
     parser.add_argument('--base-sha', required=True, help='Base SHA of the PR (before changes)')
     parser.add_argument('--head-sha', required=True, help='Head SHA of the PR (after changes)')
     parser.add_argument('--watsonx-api-key', required=True, help='API key for watsonx.ai')
+    parser.add_argument('--watsonx-project-id', default="19daaa87-9354-4516-8673-7a119cfa7886",
+                        help='Project ID for watsonx.ai (default: 19daaa87-9354-4516-8673-7a119cfa7886)')
     parser.add_argument('--testrail-url', required=True, help='URL of your TestRail instance')
     parser.add_argument('--testrail-user', required=True, help='TestRail username/email')
     parser.add_argument('--testrail-api-key', required=True, help='TestRail API key')
@@ -256,7 +259,7 @@ def main():
     
     # Generate test cases
     print("Generating test cases using watsonx.ai...")
-    watsonx_response = generate_test_cases(code_diff, args.watsonx_api_key)
+    watsonx_response = generate_test_cases(code_diff, args.watsonx_api_key, args.watsonx_project_id)
     
     # Parse test cases
     print("Parsing test cases from watsonx.ai response...")
