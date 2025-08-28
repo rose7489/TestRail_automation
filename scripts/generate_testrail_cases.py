@@ -51,13 +51,15 @@ def get_code_changes(repo_path, base_sha, head_sha):
         os.chdir(original_dir)
 
 
-def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-7a119cfa7886"):
+def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-7a119cfa7886", log_dir=None):
     """
     Send code changes to watsonx.ai to generate test cases
     
     Args:
         code_diff: String containing the git diff output
         api_key: API key for watsonx.ai
+        project_id: Project ID for watsonx.ai
+        log_dir: Directory to store log files
         
     Returns:
         JSON response from watsonx.ai
@@ -107,10 +109,15 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
         }
     }
     
-    # Create logs directory in the same directory as the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    log_dir = os.path.join(script_dir, "logs")
+    # Set up log directory
+    if log_dir is None:
+        # Default: create logs directory in the same directory as the script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        log_dir = os.path.join(script_dir, "logs")
+    
+    # Ensure log directory exists
     os.makedirs(log_dir, exist_ok=True)
+    print(f"Using log directory: {os.path.abspath(log_dir)}")
     
     # Create a timestamp using current time for uniqueness
     import datetime
@@ -319,6 +326,7 @@ def parse_arguments():
     parser.add_argument('--testrail-api-key', required=True, help='TestRail API key')
     parser.add_argument('--project-id', type=int, required=True, help='TestRail project ID')
     parser.add_argument('--suite-id', type=int, required=True, help='TestRail test suite ID')
+    parser.add_argument('--log-dir', help='Directory to store log files (default: scripts/logs)')
     
     return parser.parse_args()
 
@@ -342,7 +350,12 @@ def main():
     
     # Generate test cases
     print("Generating test cases using watsonx.ai...")
-    watsonx_response = generate_test_cases(code_diff, args.watsonx_api_key, args.watsonx_project_id)
+    watsonx_response = generate_test_cases(
+        code_diff,
+        args.watsonx_api_key,
+        args.watsonx_project_id,
+        args.log_dir
+    )
     
     # Parse test cases
     print("Parsing test cases from watsonx.ai response...")
