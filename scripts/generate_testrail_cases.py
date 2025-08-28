@@ -62,7 +62,7 @@ def generate_test_cases(code_diff, api_key):
     Returns:
         JSON response from watsonx.ai
     """
-    url = "https://us-south.ml.cloud.ibm.com/ml/v1/text/generation"
+    url = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
