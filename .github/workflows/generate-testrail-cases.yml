@@ -75,6 +75,7 @@ jobs:
             --base-sha ${{ github.event.pull_request.base.sha }} \
             --head-sha ${{ github.event.pull_request.head.sha }} \
             --watsonx-api-key "${{ secrets.WATSONX_API_KEY }}" \
+            --watsonx-project-id "${{ secrets.WATSONX_PROJECT_ID || '19daaa87-9354-4516-8673-7a119cfa7886' }}" \
             --testrail-url "${{ secrets.TESTRAIL_URL }}" \
             --testrail-user "${{ secrets.TESTRAIL_USER }}" \
             --testrail-api-key "${{ secrets.TESTRAIL_API_KEY }}" \
