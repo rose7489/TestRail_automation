@@ -469,7 +469,7 @@ def create_default_section(testrail_url, testrail_user, testrail_api_key, projec
         # Create a new section
         section_url = f"{testrail_url}/index.php?/api/v2/add_section/{project_id}"
         data = {
-            "name": "Automated Test Cases",
+            "name": "generic",  # Use "generic" as the section name
             "suite_id": suite_id,
             "description": "Test cases generated automatically from code changes"
         }
@@ -479,7 +479,7 @@ def create_default_section(testrail_url, testrail_user, testrail_api_key, projec
         
         section = response.json()
         section_id = section.get('id')
-        print(f"Created new section with ID: {section_id}")
+        print(f"Created new section 'generic' with ID: {section_id}")
         
         return section_id
     except requests.exceptions.RequestException as e:
@@ -552,15 +552,18 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
     sections = get_testrail_sections(testrail_url, testrail_user, testrail_api_key, project_id, suite_id)
     
     section_id = None
-    if sections:
-        # Use the first section if available
-        section_id = sections[0].get('id')
-        print(f"Using existing section with ID: {section_id}")
-    else:
-        # Create a default section if none exists
+    # Look for a section named "generic"
+    for section in sections:
+        if section.get('name') == "generic":
+            section_id = section.get('id')
+            print(f"Found existing 'generic' section with ID: {section_id}")
+            break
+    
+    # If no "generic" section found, create one
+    if not section_id:
         section_id = create_default_section(testrail_url, testrail_user, testrail_api_key, project_id, suite_id)
         if not section_id:
-            print("Failed to create a section. Cannot add test cases.")
+            print("Failed to create a 'generic' section. Cannot add test cases.")
             sys.exit(1)
     
     for test_case in test_cases:
