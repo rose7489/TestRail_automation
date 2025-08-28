@@ -1,13 +1,13 @@
-# TestRail Automation with watsonx.ai
+# TestRail Automation with Google Gemini
 
-This project automates the generation of TestRail test cases from code changes in pull requests using IBM's watsonx.ai.
+This project automates the generation of TestRail test cases from code changes in pull requests using Google Gemini.
 
 ## Overview
 
 When a pull request is opened or updated, this automation:
 
 1. Extracts the code changes from the PR
-2. Sends the code changes to watsonx.ai for analysis
+2. Sends the code changes to Google Gemini for analysis
 3. Generates appropriate test cases based on the code changes
 4. Creates these test cases in TestRail automatically
 
@@ -15,7 +15,7 @@ When a pull request is opened or updated, this automation:
 
 - Python 3.8+
 - Git repository with code changes
-- watsonx.ai API key
+- Google Gemini API key
 - TestRail instance with API access
 
 ## Installation
@@ -42,7 +42,8 @@ python scripts/generate_testrail_cases.py \
   --repo-path /path/to/your/repo \
   --base-sha <base-commit-sha> \
   --head-sha <head-commit-sha> \
-  --watsonx-api-key <your-watsonx-api-key> \
+  --gemini-api-key <your-gemini-api-key> \
+  --gemini-model gemini-1.5-pro \
   --testrail-url https://yourcompany.testrail.io \
   --testrail-user your.email@example.com \
   --testrail-api-key <your-testrail-api-key> \
@@ -57,7 +58,8 @@ This project includes a GitHub Actions workflow that automatically generates tes
 To set up the GitHub Actions workflow:
 
 1. Add the following secrets to your GitHub repository:
-   - `WATSONX_API_KEY`: Your watsonx.ai API key
+   - `GEMINI_API_KEY`: Your Google Gemini API key
+   - `GEMINI_MODEL`: (Optional) Gemini model to use (default: gemini-1.5-pro)
    - `TESTRAIL_URL`: URL of your TestRail instance
    - `TESTRAIL_USER`: TestRail username/email
    - `TESTRAIL_API_KEY`: TestRail API key
@@ -72,9 +74,9 @@ To set up the GitHub Actions workflow:
 
 The script uses `git diff` to extract code changes between the base and head commits of a pull request.
 
-### 2. Test Case Generation with watsonx.ai
+### 2. Test Case Generation with Google Gemini
 
-The code changes are sent to watsonx.ai with a prompt that instructs it to generate test cases. The prompt specifies the format and required fields for each test case.
+The code changes are sent to Google Gemini with a prompt that instructs it to generate test cases. The prompt specifies the format and required fields for each test case.
 
 ### 3. TestRail Integration
 
@@ -93,7 +95,7 @@ You can customize the test case generation by modifying the prompt in the `gener
 
 If you encounter issues:
 
-1. Check that your watsonx.ai API key is valid
+1. Check that your Google Gemini API key is valid
 2. Verify your TestRail API credentials
 3. Ensure the TestRail project and suite IDs are correct
 4. Check that the git repository path is valid and contains the specified commits
@@ -101,3 +103,5 @@ If you encounter issues:
 ## License
 
 [MIT License](LICENSE)
+
+// Made with Bob

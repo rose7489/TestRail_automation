@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Generate TestRail test cases from PR code changes using watsonx.ai
+Generate TestRail test cases from PR code changes using Google Gemini
 
 This script:
 1. Extracts code changes from a PR using git diff
-2. Sends the code changes to watsonx.ai to generate test cases
+2. Sends the code changes to Google Gemini to generate test cases
 3. Parses the response to extract test cases
 4. Creates the test cases in TestRail
 """
@@ -15,6 +15,9 @@ import os
 import argparse
 import re
 import sys
+import datetime
+import shutil
+from pathlib import Path
 
 
 def get_code_changes(repo_path, base_sha, head_sha):
@@ -51,23 +54,23 @@ def get_code_changes(repo_path, base_sha, head_sha):
         os.chdir(original_dir)
 
 
-def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-7a119cfa7886", log_dir=None):
+def generate_test_cases(code_diff, api_key, model="gemini-1.5-pro", log_dir=None):
     """
-    Send code changes to watsonx.ai to generate test cases
+    Send code changes to Google Gemini to generate test cases
     
     Args:
         code_diff: String containing the git diff output
-        api_key: API key for watsonx.ai
-        project_id: Project ID for watsonx.ai
+        api_key: API key for Google Gemini
+        model: Gemini model to use
         log_dir: Directory to store log files
         
     Returns:
-        JSON response from watsonx.ai
+        JSON response from Gemini
     """
-    url = "https://eu-de.ml.cloud.ibm.com/ml/v1/text/generation?version=2024-05-31"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key
     }
     
     prompt = f"""
@@ -100,12 +103,14 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
     """
     
     data = {
-        "model_id": "ibm/granite-13b-instruct-v2",
-        "input": prompt,
-        "project_id": project_id,
-        "parameters": {
+        "contents": [{
+            "parts": [{
+                "text": prompt
+            }]
+        }],
+        "generationConfig": {
             "temperature": 0.7,
-            "max_new_tokens": 1024
+            "maxOutputTokens": 1024
         }
     }
     
@@ -123,17 +128,17 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
     import datetime
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Log the prompt being sent to watsonx.ai
-    prompt_log_file = os.path.join(log_dir, f"watsonx_prompt_{timestamp}.txt")
+    # Log the prompt being sent to Gemini
+    prompt_log_file = os.path.join(log_dir, f"gemini_prompt_{timestamp}.txt")
     with open(prompt_log_file, 'w') as f:
         f.write(prompt)
-    print(f"\n--- Logging watsonx.ai Prompt ---")
+    print(f"\n--- Logging Gemini Prompt ---")
     print(f"Prompt saved to: {prompt_log_file}")
     print(f"Absolute path: {os.path.abspath(prompt_log_file)}")
     print(f"Prompt (first 200 chars):\n{prompt[:200]}...")
     
     try:
-        print("\nSending request to watsonx.ai API...")
+        print("\nSending request to Gemini API...")
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()  # Raise exception for 4XX/5XX responses
         
@@ -141,13 +146,13 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
         response_json = response.json()
         
         # Log the raw response
-        print("\n--- watsonx.ai API Response ---")
-        if "results" in response_json and len(response_json["results"]) > 0:
-            generated_text = response_json["results"][0].get("generated_text", "")
+        print("\n--- Gemini API Response ---")
+        if "candidates" in response_json and len(response_json["candidates"]) > 0:
+            generated_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
             print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
             
             # Save the full response to a file for debugging
-            response_log_file = os.path.join(log_dir, f"watsonx_response_{timestamp}.json")
+            response_log_file = os.path.join(log_dir, f"gemini_response_{timestamp}.json")
             
             # Save the response to the log file
             with open(response_log_file, 'w') as f:
@@ -161,29 +166,31 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
         
         return response_json
     except requests.exceptions.RequestException as e:
-        print(f"Error calling watsonx.ai API: {e}")
+        print(f"Error calling Gemini API: {e}")
         if hasattr(e, 'response') and e.response:
             print(f"Response status: {e.response.status_code}")
             print(f"Response body: {e.response.text}")
         sys.exit(1)
 
 
-def parse_test_cases(watsonx_response):
+def parse_test_cases(gemini_response):
     """
-    Parse watsonx.ai response to extract test cases
+    Parse Gemini response to extract test cases
     
     Args:
-        watsonx_response: JSON response from watsonx.ai
+        gemini_response: JSON response from Gemini
         
     Returns:
         List of test case dictionaries
     """
     try:
         # Extract the generated text from the response
-        response_text = watsonx_response.get("results", [{}])[0].get("generated_text", "")
+        response_text = ""
+        if "candidates" in gemini_response and len(gemini_response["candidates"]) > 0:
+            response_text = gemini_response["candidates"][0]["content"]["parts"][0]["text"]
         
         if not response_text:
-            print("Error: Empty response from watsonx.ai")
+            print("Error: Empty response from Gemini")
             sys.exit(1)
         
         # Extract JSON from the response text
@@ -230,7 +237,7 @@ def parse_test_cases(watsonx_response):
             print(f"JSON string: {json_str[:200]}...")  # Print first 200 chars
             return []
     except Exception as e:
-        print(f"Error parsing watsonx.ai response: {e}")
+        print(f"Error parsing Gemini response: {e}")
         sys.exit(1)
 
 
@@ -318,9 +325,9 @@ def parse_arguments():
     parser.add_argument('--repo-path', required=True, help='Path to the git repository')
     parser.add_argument('--base-sha', required=True, help='Base SHA of the PR (before changes)')
     parser.add_argument('--head-sha', required=True, help='Head SHA of the PR (after changes)')
-    parser.add_argument('--watsonx-api-key', required=True, help='API key for watsonx.ai')
-    parser.add_argument('--watsonx-project-id', default="19daaa87-9354-4516-8673-7a119cfa7886",
-                        help='Project ID for watsonx.ai (default: 19daaa87-9354-4516-8673-7a119cfa7886)')
+    parser.add_argument('--gemini-api-key', required=True, help='API key for Google Gemini')
+    parser.add_argument('--gemini-model', default="gemini-1.5-pro",
+                        help='Gemini model to use (default: gemini-1.5-pro)')
     parser.add_argument('--testrail-url', required=True, help='URL of your TestRail instance')
     parser.add_argument('--testrail-user', required=True, help='TestRail username/email')
     parser.add_argument('--testrail-api-key', required=True, help='TestRail API key')
@@ -349,17 +356,17 @@ def main():
     print(f"Found {len(code_diff.splitlines())} lines of code changes")
     
     # Generate test cases
-    print("Generating test cases using watsonx.ai...")
-    watsonx_response = generate_test_cases(
+    print("Generating test cases using Google Gemini...")
+    gemini_response = generate_test_cases(
         code_diff,
-        args.watsonx_api_key,
-        args.watsonx_project_id,
+        args.gemini_api_key,
+        args.gemini_model,
         args.log_dir
     )
     
     # Parse test cases
-    print("Parsing test cases from watsonx.ai response...")
-    test_cases = parse_test_cases(watsonx_response)
+    print("Parsing test cases from Gemini response...")
+    test_cases = parse_test_cases(gemini_response)
     
     print(f"Found {len(test_cases)} test cases")
     

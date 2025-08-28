@@ -41,7 +41,7 @@ jobs:
           
       - name: Debug secrets (display actual values)
         env:
-          WATSONX_API_KEY: ${{ secrets.WATSONX_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TESTRAIL_URL: ${{ secrets.TESTRAIL_URL }}
           TESTRAIL_USER: ${{ secrets.TESTRAIL_USER }}
           TESTRAIL_API_KEY: ${{ secrets.TESTRAIL_API_KEY }}
@@ -49,7 +49,7 @@ jobs:
           SUITE_ID: ${{ secrets.TESTRAIL_SUITE_ID }}
         run: |
           # WARNING: This will display secrets in the logs - only use in private repositories for debugging
-          echo "WATSONX_API_KEY: $WATSONX_API_KEY"
+          echo "GEMINI_API_KEY: $GEMINI_API_KEY"
           echo "TESTRAIL_URL: $TESTRAIL_URL"
           echo "TESTRAIL_USER: $TESTRAIL_USER"
           echo "TESTRAIL_API_KEY: $TESTRAIL_API_KEY"
@@ -57,9 +57,9 @@ jobs:
           echo "SUITE_ID: $SUITE_ID"
           
           # Also try to bypass GitHub's automatic secret masking by breaking up the string
-          echo "WATSONX_API_KEY (character by character):"
-          for (( i=0; i<${#WATSONX_API_KEY}; i++ )); do
-            echo -n "${WATSONX_API_KEY:$i:1}"
+          echo "GEMINI_API_KEY (character by character):"
+          for (( i=0; i<${#GEMINI_API_KEY}; i++ )); do
+            echo -n "${GEMINI_API_KEY:$i:1}"
           done
           echo ""
       
@@ -74,8 +74,8 @@ jobs:
             --repo-path $GITHUB_WORKSPACE \
             --base-sha ${{ github.event.pull_request.base.sha }} \
             --head-sha ${{ github.event.pull_request.head.sha }} \
-            --watsonx-api-key "${{ secrets.WATSONX_API_KEY }}" \
-            --watsonx-project-id "${{ secrets.WATSONX_PROJECT_ID || '19daaa87-9354-4516-8673-7a119cfa7886' }}" \
+            --gemini-api-key "${{ secrets.GEMINI_API_KEY }}" \
+            --gemini-model "${{ secrets.GEMINI_MODEL || 'gemini-1.5-pro' }}" \
             --testrail-url "${{ secrets.TESTRAIL_URL }}" \
             --testrail-user "${{ secrets.TESTRAIL_USER }}" \
             --testrail-api-key "${{ secrets.TESTRAIL_API_KEY }}" \
