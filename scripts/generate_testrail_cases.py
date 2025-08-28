@@ -103,6 +103,7 @@ def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=No
     3. Make sure each test case has all required fields: title, preconditions, steps, expected_results, and priority
     4. Do not include any explanatory text outside the JSON structure
     5. Ensure the JSON is properly formatted and valid
+    6. Double-check that your JSON is valid and can be parsed by standard JSON parsers
     """
     
     data = {
@@ -112,7 +113,7 @@ def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=No
             }]
         }],
         "generationConfig": {
-            "temperature": 0.7,
+            "temperature": 0.2,  # Lower temperature for more consistent JSON output
             "maxOutputTokens": 1024
         }
     }
@@ -206,6 +207,29 @@ def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=No
                 sys.exit(1)
 
 
+def fix_json_string(json_str):
+    """
+    Attempt to fix common JSON formatting issues
+    
+    Args:
+        json_str: JSON string that might have formatting issues
+        
+    Returns:
+        Fixed JSON string
+    """
+    # Replace single quotes with double quotes
+    json_str = re.sub(r"(?<![\\])\'", "\"", json_str)
+    
+    # Fix trailing commas in arrays and objects
+    json_str = re.sub(r",\s*}", "}", json_str)
+    json_str = re.sub(r",\s*\]", "]", json_str)
+    
+    # Fix missing quotes around property names
+    json_str = re.sub(r"([{,]\s*)(\w+)(\s*:)", r'\1"\2"\3', json_str)
+    
+    return json_str
+
+
 def parse_test_cases(gemini_response):
     """
     Parse Gemini response to extract test cases
@@ -226,49 +250,91 @@ def parse_test_cases(gemini_response):
             print("Error: Empty response from Gemini")
             sys.exit(1)
         
+        # Log the full response text for debugging
+        print(f"\nFull response text:\n{response_text}\n")
+        
         # Extract JSON from the response text
         # First, try to find JSON between code blocks
         json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
         if json_match:
             json_str = json_match.group(1)
+            print("Found JSON in code block")
         else:
             # If no code blocks, try to extract JSON directly
             json_match = re.search(r'(\{.*\})', response_text, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
+                print("Found JSON without code block")
             else:
                 print("Warning: No JSON found in the response")
                 print(f"Response text: {response_text[:500]}...")  # Print first 500 chars
                 return []
         
+        # Print the extracted JSON string for debugging
+        print(f"\nExtracted JSON string:\n{json_str}\n")
+        
         try:
-            # Parse the JSON string
+            # Try to parse the JSON string directly
             parsed_json = json.loads(json_str)
-            
-            # Extract test cases from the parsed JSON
-            if "test_cases" in parsed_json and isinstance(parsed_json["test_cases"], list):
-                test_cases = parsed_json["test_cases"]
-            else:
-                print("Warning: Invalid JSON format - 'test_cases' array not found")
-                return []
-            
-            # Validate each test case
-            valid_test_cases = []
-            required_fields = ["title", "preconditions", "steps", "expected_results", "priority"]
-            
-            for test_case in test_cases:
-                if all(field in test_case for field in required_fields):
-                    valid_test_cases.append(test_case)
-                else:
-                    missing = [f for f in required_fields if f not in test_case]
-                    print(f"Warning: Test case missing required fields: {missing}")
-            
-            return valid_test_cases
-            
         except json.JSONDecodeError as e:
-            print(f"Error parsing JSON: {e}")
-            print(f"JSON string: {json_str[:200]}...")  # Print first 200 chars
+            print(f"Initial JSON parsing error: {e}")
+            print("Attempting to fix JSON formatting issues...")
+            
+            # Try to fix common JSON formatting issues
+            fixed_json_str = fix_json_string(json_str)
+            print(f"\nFixed JSON string:\n{fixed_json_str}\n")
+            
+            try:
+                # Try to parse the fixed JSON string
+                parsed_json = json.loads(fixed_json_str)
+                print("Successfully parsed JSON after fixing formatting issues")
+            except json.JSONDecodeError as e:
+                print(f"Error parsing fixed JSON: {e}")
+                print("Attempting to create a valid test case structure manually...")
+                
+                # As a last resort, try to extract test case information manually
+                title_match = re.search(r'"title"\s*:\s*"([^"]+)"', json_str)
+                precond_match = re.search(r'"preconditions"\s*:\s*"([^"]+)"', json_str)
+                steps_match = re.search(r'"steps"\s*:\s*"([^"]+)"', json_str)
+                expected_match = re.search(r'"expected_results"\s*:\s*"([^"]+)"', json_str)
+                priority_match = re.search(r'"priority"\s*:\s*"([^"]+)"', json_str)
+                
+                if title_match and precond_match and steps_match and expected_match and priority_match:
+                    # Create a test case manually
+                    parsed_json = {
+                        "test_cases": [{
+                            "title": title_match.group(1),
+                            "preconditions": precond_match.group(1),
+                            "steps": steps_match.group(1),
+                            "expected_results": expected_match.group(1),
+                            "priority": priority_match.group(1)
+                        }]
+                    }
+                    print("Created test case structure manually")
+                else:
+                    print("Could not extract test case information manually")
+                    return []
+        
+        # Extract test cases from the parsed JSON
+        if "test_cases" in parsed_json and isinstance(parsed_json["test_cases"], list):
+            test_cases = parsed_json["test_cases"]
+        else:
+            print("Warning: Invalid JSON format - 'test_cases' array not found")
             return []
+        
+        # Validate each test case
+        valid_test_cases = []
+        required_fields = ["title", "preconditions", "steps", "expected_results", "priority"]
+        
+        for test_case in test_cases:
+            if all(field in test_case for field in required_fields):
+                valid_test_cases.append(test_case)
+            else:
+                missing = [f for f in required_fields if f not in test_case]
+                print(f"Warning: Test case missing required fields: {missing}")
+        
+        return valid_test_cases
+            
     except Exception as e:
         print(f"Error parsing Gemini response: {e}")
         sys.exit(1)
