@@ -73,12 +73,28 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
     
     {code_diff}
     
-    For each significant change, create a test case in JSON format with:
-    1. Title
-    2. Preconditions
-    3. Steps to execute
-    4. Expected results
-    5. Priority (Critical/High/Medium/Low)
+    For each significant change, create a test case following this exact JSON schema:
+    
+    ```json
+    {{
+      "test_cases": [
+        {{
+          "title": "Test case title",
+          "preconditions": "Any preconditions needed for the test",
+          "steps": "Step-by-step instructions to execute the test",
+          "expected_results": "Expected outcomes after test execution",
+          "priority": "Critical|High|Medium|Low"
+        }}
+      ]
+    }}
+    ```
+    
+    Important guidelines:
+    1. Return ONLY valid JSON that strictly follows the schema above
+    2. Include multiple test cases in the "test_cases" array if needed
+    3. Make sure each test case has all required fields: title, preconditions, steps, expected_results, and priority
+    4. Do not include any explanatory text outside the JSON structure
+    5. Ensure the JSON is properly formatted and valid
     """
     
     data = {
@@ -120,33 +136,50 @@ def parse_test_cases(watsonx_response):
         if not response_text:
             print("Error: Empty response from watsonx.ai")
             sys.exit(1)
+        
+        # Extract JSON from the response text
+        # First, try to find JSON between code blocks
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # If no code blocks, try to extract JSON directly
+            json_match = re.search(r'(\{.*\})', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                print("Warning: No JSON found in the response")
+                print(f"Response text: {response_text[:500]}...")  # Print first 500 chars
+                return []
+        
+        try:
+            # Parse the JSON string
+            parsed_json = json.loads(json_str)
             
-        # Extract JSON objects from the text
-        # This is a simplified approach and might need refinement based on actual responses
-        json_pattern = r'\{[^{}]*\}'
-        json_matches = re.findall(json_pattern, response_text)
-        
-        if not json_matches:
-            print("Warning: No JSON test cases found in the response")
-            print(f"Response text: {response_text[:500]}...")  # Print first 500 chars
-            return []
-        
-        test_cases = []
-        for json_str in json_matches:
-            try:
-                test_case = json.loads(json_str)
-                # Validate required fields
-                required_fields = ["title", "preconditions", "steps", "expected_results", "priority"]
+            # Extract test cases from the parsed JSON
+            if "test_cases" in parsed_json and isinstance(parsed_json["test_cases"], list):
+                test_cases = parsed_json["test_cases"]
+            else:
+                print("Warning: Invalid JSON format - 'test_cases' array not found")
+                return []
+            
+            # Validate each test case
+            valid_test_cases = []
+            required_fields = ["title", "preconditions", "steps", "expected_results", "priority"]
+            
+            for test_case in test_cases:
                 if all(field in test_case for field in required_fields):
-                    test_cases.append(test_case)
+                    valid_test_cases.append(test_case)
                 else:
                     missing = [f for f in required_fields if f not in test_case]
                     print(f"Warning: Test case missing required fields: {missing}")
-            except json.JSONDecodeError:
-                print(f"Warning: Could not parse JSON: {json_str[:100]}...")
-                continue
-        
-        return test_cases
+            
+            return valid_test_cases
+            
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON: {e}")
+            print(f"JSON string: {json_str[:200]}...")  # Print first 200 chars
+            return []
     except Exception as e:
         print(f"Error parsing watsonx.ai response: {e}")
         sys.exit(1)
@@ -180,17 +213,24 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
     
     for test_case in test_cases:
         try:
+            # Extract fields from the test case
+            title = test_case.get("title", "")
+            preconditions = test_case.get("preconditions", "")
+            steps = test_case.get("steps", "")
+            expected_results = test_case.get("expected_results", "")
+            
             # Map priority string to TestRail priority ID
             priority = test_case.get("priority", "Medium")
             priority_id = priority_map.get(priority, 3)  # Default to Medium (3) if not found
             
+            # Prepare data for TestRail API
             data = {
-                "title": test_case["title"],
+                "title": title,
                 "type_id": 1,  # Functional test
                 "priority_id": priority_id,
-                "custom_preconds": test_case["preconditions"],
-                "custom_steps": test_case["steps"],
-                "custom_expected": test_case["expected_results"]
+                "custom_preconds": preconditions,
+                "custom_steps": steps,
+                "custom_expected": expected_results
             }
             
             # Add optional fields if present
@@ -199,6 +239,7 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
             if "estimate" in test_case:
                 data["estimate"] = test_case["estimate"]
             
+            # Send request to TestRail API
             response = session.post(
                 f"{testrail_url}/index.php?/api/v2/add_case/{suite_id}",
                 json=data
@@ -206,7 +247,7 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
             
             if response.status_code == 200:
                 created_count += 1
-                print(f"Created test case: {test_case['title']}")
+                print(f"Created test case: {title}")
             else:
                 failed_count += 1
                 print(f"Failed to create test case: {response.text}")
