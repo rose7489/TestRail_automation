@@ -122,15 +122,21 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
             print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
             
             # Save the full response to a file for debugging
-            log_dir = "logs"
+            # Create logs directory in the same directory as the script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            log_dir = os.path.join(script_dir, "logs")
             os.makedirs(log_dir, exist_ok=True)
-            timestamp = os.path.basename(__file__).replace('.py', '') + "_" + \
-                       str(int(os.path.getmtime(__file__)))
+            
+            # Create a timestamp using current time for uniqueness
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             log_file = os.path.join(log_dir, f"watsonx_response_{timestamp}.json")
             
+            # Save the response to the log file
             with open(log_file, 'w') as f:
                 json.dump(response_json, f, indent=2)
             print(f"Full response saved to: {log_file}")
+            print(f"Absolute path: {os.path.abspath(log_file)}")
         else:
             print("Warning: Unexpected response format")
             print(f"Raw response: {json.dumps(response_json, indent=2)[:500]}...")
