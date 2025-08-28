@@ -107,8 +107,26 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
         }
     }
     
+    # Create logs directory in the same directory as the script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create a timestamp using current time for uniqueness
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Log the prompt being sent to watsonx.ai
+    prompt_log_file = os.path.join(log_dir, f"watsonx_prompt_{timestamp}.txt")
+    with open(prompt_log_file, 'w') as f:
+        f.write(prompt)
+    print(f"\n--- Logging watsonx.ai Prompt ---")
+    print(f"Prompt saved to: {prompt_log_file}")
+    print(f"Absolute path: {os.path.abspath(prompt_log_file)}")
+    print(f"Prompt (first 200 chars):\n{prompt[:200]}...")
+    
     try:
-        print("Sending request to watsonx.ai API...")
+        print("\nSending request to watsonx.ai API...")
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()  # Raise exception for 4XX/5XX responses
         
@@ -122,21 +140,13 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
             print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
             
             # Save the full response to a file for debugging
-            # Create logs directory in the same directory as the script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            log_dir = os.path.join(script_dir, "logs")
-            os.makedirs(log_dir, exist_ok=True)
-            
-            # Create a timestamp using current time for uniqueness
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            log_file = os.path.join(log_dir, f"watsonx_response_{timestamp}.json")
+            response_log_file = os.path.join(log_dir, f"watsonx_response_{timestamp}.json")
             
             # Save the response to the log file
-            with open(log_file, 'w') as f:
+            with open(response_log_file, 'w') as f:
                 json.dump(response_json, f, indent=2)
-            print(f"Full response saved to: {log_file}")
-            print(f"Absolute path: {os.path.abspath(log_file)}")
+            print(f"Full response saved to: {response_log_file}")
+            print(f"Absolute path: {os.path.abspath(response_log_file)}")
         else:
             print("Warning: Unexpected response format")
             print(f"Raw response: {json.dumps(response_json, indent=2)[:500]}...")
