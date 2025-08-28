@@ -38,6 +38,30 @@ jobs:
           
           # Print Python version for debugging
           python --version
+          
+      - name: Debug secrets (safely)
+        env:
+          WATSONX_API_KEY: ${{ secrets.WATSONX_API_KEY }}
+          TESTRAIL_URL: ${{ secrets.TESTRAIL_URL }}
+          TESTRAIL_USER: ${{ secrets.TESTRAIL_USER }}
+          TESTRAIL_API_KEY: ${{ secrets.TESTRAIL_API_KEY }}
+          PROJECT_ID: ${{ secrets.TESTRAIL_PROJECT_ID }}
+          SUITE_ID: ${{ secrets.TESTRAIL_SUITE_ID }}
+        run: |
+          # Check if secrets are set and show their length
+          echo "Debugging secrets (safely):"
+          echo "WATSONX_API_KEY is empty: $([ -z \"$WATSONX_API_KEY\" ] && echo 'YES' || echo 'NO')"
+          echo "WATSONX_API_KEY length: ${#WATSONX_API_KEY}"
+          echo "TESTRAIL_URL is empty: $([ -z \"$TESTRAIL_URL\" ] && echo 'YES' || echo 'NO')"
+          echo "TESTRAIL_USER is empty: $([ -z \"$TESTRAIL_USER\" ] && echo 'YES' || echo 'NO')"
+          echo "TESTRAIL_API_KEY is empty: $([ -z \"$TESTRAIL_API_KEY\" ] && echo 'YES' || echo 'NO')"
+          echo "PROJECT_ID is empty: $([ -z \"$PROJECT_ID\" ] && echo 'YES' || echo 'NO')"
+          echo "SUITE_ID is empty: $([ -z \"$SUITE_ID\" ] && echo 'YES' || echo 'NO')"
+          
+          # Show first character of secrets (if they exist)
+          if [ -n "$WATSONX_API_KEY" ]; then
+            echo "First character of WATSONX_API_KEY: ${WATSONX_API_KEY:0:1}"
+          fi
       
       - name: Generate and upload test cases
         # Pass secrets directly to the command instead of using environment variables
