@@ -43,13 +43,24 @@ python scripts/generate_testrail_cases.py \
   --base-sha <base-commit-sha> \
   --head-sha <head-commit-sha> \
   --gemini-api-key <your-gemini-api-key> \
-  --gemini-model gemini-1.5-pro \
+  --gemini-model gemini-2.0-flash \
   --testrail-url https://yourcompany.testrail.io \
   --testrail-user your.email@example.com \
   --testrail-api-key <your-testrail-api-key> \
   --project-id <testrail-project-id> \
-  --suite-id <testrail-suite-id>
+  --suite-id <testrail-suite-id> \
+  --max-retries 5 \
+  --retry-delay 10
 ```
+
+### Rate Limiting and Retries
+
+The script includes built-in retry logic to handle rate limiting from the Gemini API:
+
+- `--max-retries`: Maximum number of retry attempts (default: 3)
+- `--retry-delay`: Base delay in seconds between retries (default: 5)
+
+The actual delay increases with each retry attempt (exponential backoff).
 
 ### GitHub Actions Integration
 
@@ -59,12 +70,14 @@ To set up the GitHub Actions workflow:
 
 1. Add the following secrets to your GitHub repository:
    - `GEMINI_API_KEY`: Your Google Gemini API key
-   - `GEMINI_MODEL`: (Optional) Gemini model to use (default: gemini-1.5-pro)
+   - `GEMINI_MODEL`: (Optional) Gemini model to use (default: gemini-2.0-flash)
    - `TESTRAIL_URL`: URL of your TestRail instance
    - `TESTRAIL_USER`: TestRail username/email
    - `TESTRAIL_API_KEY`: TestRail API key
    - `TESTRAIL_PROJECT_ID`: TestRail project ID
    - `TESTRAIL_SUITE_ID`: TestRail test suite ID
+   - `MAX_RETRIES`: (Optional) Maximum number of retry attempts (default: 5)
+   - `RETRY_DELAY`: (Optional) Base delay in seconds between retries (default: 10)
 
 2. The workflow file is already configured in `.github/workflows/generate-testrail-cases.yml`
 
@@ -99,6 +112,10 @@ If you encounter issues:
 2. Verify your TestRail API credentials
 3. Ensure the TestRail project and suite IDs are correct
 4. Check that the git repository path is valid and contains the specified commits
+5. If you're encountering rate limit errors:
+   - Increase the `--max-retries` value
+   - Increase the `--retry-delay` value
+   - Consider using a different Gemini model with higher rate limits
 
 ## License
 

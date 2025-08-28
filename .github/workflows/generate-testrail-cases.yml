@@ -75,11 +75,13 @@ jobs:
             --base-sha ${{ github.event.pull_request.base.sha }} \
             --head-sha ${{ github.event.pull_request.head.sha }} \
             --gemini-api-key "${{ secrets.GEMINI_API_KEY }}" \
-            --gemini-model "${{ secrets.GEMINI_MODEL || 'gemini-1.5-pro' }}" \
+            --gemini-model "${{ secrets.GEMINI_MODEL || 'gemini-2.0-flash' }}" \
             --testrail-url "${{ secrets.TESTRAIL_URL }}" \
             --testrail-user "${{ secrets.TESTRAIL_USER }}" \
             --testrail-api-key "${{ secrets.TESTRAIL_API_KEY }}" \
             --project-id "${{ secrets.TESTRAIL_PROJECT_ID }}" \
-            --suite-id "${{ secrets.TESTRAIL_SUITE_ID }}"
+            --suite-id "${{ secrets.TESTRAIL_SUITE_ID }}" \
+            --max-retries "${{ secrets.MAX_RETRIES || 5 }}" \
+            --retry-delay "${{ secrets.RETRY_DELAY || 10 }}"
 
 # Made with Bob

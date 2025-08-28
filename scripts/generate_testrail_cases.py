@@ -17,6 +17,7 @@ import re
 import sys
 import datetime
 import shutil
+import time
 from pathlib import Path
 
 
@@ -54,7 +55,7 @@ def get_code_changes(repo_path, base_sha, head_sha):
         os.chdir(original_dir)
 
 
-def generate_test_cases(code_diff, api_key, model="gemini-1.5-pro", log_dir=None):
+def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=None, max_retries=3, retry_delay=5):
     """
     Send code changes to Google Gemini to generate test cases
     
@@ -63,6 +64,8 @@ def generate_test_cases(code_diff, api_key, model="gemini-1.5-pro", log_dir=None
         api_key: API key for Google Gemini
         model: Gemini model to use
         log_dir: Directory to store log files
+        max_retries: Maximum number of retries on rate limit errors
+        retry_delay: Delay between retries in seconds
         
     Returns:
         JSON response from Gemini
@@ -137,40 +140,70 @@ def generate_test_cases(code_diff, api_key, model="gemini-1.5-pro", log_dir=None
     print(f"Absolute path: {os.path.abspath(prompt_log_file)}")
     print(f"Prompt (first 200 chars):\n{prompt[:200]}...")
     
-    try:
-        print("\nSending request to Gemini API...")
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Raise exception for 4XX/5XX responses
-        
-        # Get the response JSON
-        response_json = response.json()
-        
-        # Log the raw response
-        print("\n--- Gemini API Response ---")
-        if "candidates" in response_json and len(response_json["candidates"]) > 0:
-            generated_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
-            print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
+    # Implement retry logic for rate limiting
+    retry_count = 0
+    while retry_count <= max_retries:
+        try:
+            print(f"\nSending request to Gemini API (attempt {retry_count + 1}/{max_retries + 1})...")
+            response = requests.post(url, headers=headers, json=data)
             
-            # Save the full response to a file for debugging
-            response_log_file = os.path.join(log_dir, f"gemini_response_{timestamp}.json")
+            # Check for rate limiting
+            if response.status_code == 429:
+                retry_count += 1
+                if retry_count <= max_retries:
+                    retry_seconds = retry_delay * retry_count
+                    print(f"Rate limit exceeded. Retrying in {retry_seconds} seconds...")
+                    time.sleep(retry_seconds)
+                    continue
+                else:
+                    print("Maximum retry attempts reached. Exiting.")
+                    response.raise_for_status()
+            else:
+                # For non-rate limit errors, just raise the exception
+                response.raise_for_status()
             
-            # Save the response to the log file
-            with open(response_log_file, 'w') as f:
-                json.dump(response_json, f, indent=2)
-            print(f"Full response saved to: {response_log_file}")
-            print(f"Absolute path: {os.path.abspath(response_log_file)}")
-        else:
-            print("Warning: Unexpected response format")
-            print(f"Raw response: {json.dumps(response_json, indent=2)[:500]}...")
-        print("-------------------------------\n")
-        
-        return response_json
-    except requests.exceptions.RequestException as e:
-        print(f"Error calling Gemini API: {e}")
-        if hasattr(e, 'response') and e.response:
-            print(f"Response status: {e.response.status_code}")
-            print(f"Response body: {e.response.text}")
-        sys.exit(1)
+            # Get the response JSON
+            response_json = response.json()
+            
+            # Log the raw response
+            print("\n--- Gemini API Response ---")
+            if "candidates" in response_json and len(response_json["candidates"]) > 0:
+                generated_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
+                print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
+                
+                # Save the full response to a file for debugging
+                response_log_file = os.path.join(log_dir, f"gemini_response_{timestamp}.json")
+                
+                # Save the response to the log file
+                with open(response_log_file, 'w') as f:
+                    json.dump(response_json, f, indent=2)
+                print(f"Full response saved to: {response_log_file}")
+                print(f"Absolute path: {os.path.abspath(response_log_file)}")
+            else:
+                print("Warning: Unexpected response format")
+                print(f"Raw response: {json.dumps(response_json, indent=2)[:500]}...")
+            print("-------------------------------\n")
+            
+            return response_json
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error calling Gemini API: {e}")
+            if hasattr(e, 'response') and e.response:
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text}")
+                
+                # If it's not a rate limit error or we've exhausted retries, exit
+                if e.response.status_code != 429 or retry_count >= max_retries:
+                    sys.exit(1)
+                
+                # For rate limit errors, retry with exponential backoff
+                retry_count += 1
+                retry_seconds = retry_delay * retry_count
+                print(f"Rate limit exceeded. Retrying in {retry_seconds} seconds...")
+                time.sleep(retry_seconds)
+            else:
+                # For other errors without response, exit
+                sys.exit(1)
 
 
 def parse_test_cases(gemini_response):
@@ -326,14 +359,16 @@ def parse_arguments():
     parser.add_argument('--base-sha', required=True, help='Base SHA of the PR (before changes)')
     parser.add_argument('--head-sha', required=True, help='Head SHA of the PR (after changes)')
     parser.add_argument('--gemini-api-key', required=True, help='API key for Google Gemini')
-    parser.add_argument('--gemini-model', default="gemini-1.5-pro",
-                        help='Gemini model to use (default: gemini-1.5-pro)')
+    parser.add_argument('--gemini-model', default="gemini-2.0-flash",
+                        help='Gemini model to use (default: gemini-2.0-flash)')
     parser.add_argument('--testrail-url', required=True, help='URL of your TestRail instance')
     parser.add_argument('--testrail-user', required=True, help='TestRail username/email')
     parser.add_argument('--testrail-api-key', required=True, help='TestRail API key')
     parser.add_argument('--project-id', type=int, required=True, help='TestRail project ID')
     parser.add_argument('--suite-id', type=int, required=True, help='TestRail test suite ID')
     parser.add_argument('--log-dir', help='Directory to store log files (default: scripts/logs)')
+    parser.add_argument('--max-retries', type=int, default=3, help='Maximum number of retries on rate limit errors')
+    parser.add_argument('--retry-delay', type=int, default=5, help='Base delay between retries in seconds')
     
     return parser.parse_args()
 
@@ -361,7 +396,9 @@ def main():
         code_diff,
         args.gemini_api_key,
         args.gemini_model,
-        args.log_dir
+        args.log_dir,
+        args.max_retries,
+        args.retry_delay
     )
     
     # Parse test cases

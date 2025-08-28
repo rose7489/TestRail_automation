@@ -20,11 +20,13 @@ python scripts/generate_testrail_cases.py \
   --base-sha "$BASE_SHA" \
   --head-sha "$HEAD_SHA" \
   --gemini-api-key "$GEMINI_API_KEY" \
-  --gemini-model "gemini-1.5-pro" \
+  --gemini-model "gemini-2.0-flash" \
   --testrail-url "$TESTRAIL_URL" \
   --testrail-user "$TESTRAIL_USER" \
   --testrail-api-key "$TESTRAIL_API_KEY" \
   --project-id "$TESTRAIL_PROJECT_ID" \
-  --suite-id "$TESTRAIL_SUITE_ID"
+  --suite-id "$TESTRAIL_SUITE_ID" \
+  --max-retries 5 \
+  --retry-delay 10
 
 # Made with Bob
