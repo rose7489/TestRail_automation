@@ -18,6 +18,7 @@ import sys
 import datetime
 import shutil
 import time
+import base64
 from pathlib import Path
 
 
@@ -97,13 +98,41 @@ def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=No
     }}
     ```
     
-    Important guidelines:
+    EXTREMELY IMPORTANT INSTRUCTIONS FOR JSON FORMATTING:
     1. Return ONLY valid JSON that strictly follows the schema above
     2. Include multiple test cases in the "test_cases" array if needed
     3. Make sure each test case has all required fields: title, preconditions, steps, expected_results, and priority
     4. Do not include any explanatory text outside the JSON structure
     5. Ensure the JSON is properly formatted and valid
-    6. Double-check that your JSON is valid and can be parsed by standard JSON parsers
+    6. Double-check that all arrays and objects are properly closed with ] and }} respectively
+    7. Verify that all property names and string values are enclosed in double quotes
+    8. Ensure there are no trailing commas in arrays or objects
+    9. Make sure all JSON syntax is 100% correct and can be parsed by standard JSON parsers
+    10. The response should be a single, complete, valid JSON object
+    
+    Example of properly formatted JSON:
+    ```json
+    {{
+      "test_cases": [
+        {{
+          "title": "Verify addition functionality",
+          "preconditions": "Calculator app is open",
+          "steps": "1. Enter 5\\n2. Press + button\\n3. Enter 7\\n4. Press = button",
+          "expected_results": "The result 12 is displayed",
+          "priority": "High"
+        }},
+        {{
+          "title": "Verify subtraction functionality",
+          "preconditions": "Calculator app is open",
+          "steps": "1. Enter 10\\n2. Press - button\\n3. Enter 3\\n4. Press = button",
+          "expected_results": "The result 7 is displayed",
+          "priority": "High"
+        }}
+      ]
+    }}
+    ```
+    
+    Remember: Your response must be ONLY the JSON object, nothing else.
     """
     
     data = {
@@ -113,7 +142,7 @@ def generate_test_cases(code_diff, api_key, model="gemini-2.0-flash", log_dir=No
             }]
         }],
         "generationConfig": {
-            "temperature": 0.2,  # Lower temperature for more consistent JSON output
+            "temperature": 0.1,  # Very low temperature for more consistent JSON output
             "maxOutputTokens": 1024
         }
     }
@@ -226,6 +255,18 @@ def fix_json_string(json_str):
     
     # Fix missing quotes around property names
     json_str = re.sub(r"([{,]\s*)(\w+)(\s*:)", r'\1"\2"\3', json_str)
+    
+    # Fix unclosed arrays by adding missing closing brackets
+    open_brackets = json_str.count("[")
+    close_brackets = json_str.count("]")
+    if open_brackets > close_brackets:
+        json_str += "]" * (open_brackets - close_brackets)
+    
+    # Fix unclosed objects by adding missing closing braces
+    open_braces = json_str.count("{")
+    close_braces = json_str.count("}")
+    if open_braces > close_braces:
+        json_str += "}" * (open_braces - close_braces)
     
     return json_str
 
@@ -340,6 +381,115 @@ def parse_test_cases(gemini_response):
         sys.exit(1)
 
 
+def get_testrail_sections(testrail_url, testrail_user, testrail_api_key, project_id, suite_id):
+    """
+    Get available sections in TestRail for the given project and suite
+    
+    Args:
+        testrail_url: URL of your TestRail instance
+        testrail_user: TestRail username/email
+        testrail_api_key: TestRail API key
+        project_id: TestRail project ID
+        suite_id: TestRail test suite ID
+        
+    Returns:
+        List of section dictionaries
+    """
+    # Create a session for TestRail API requests
+    session = requests.Session()
+    
+    # Set up authentication headers
+    auth_str = f"{testrail_user}:{testrail_api_key}"
+    auth_bytes = auth_str.encode('ascii')
+    auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+    
+    session.headers.update({
+        'Content-Type': 'application/json',
+        'Authorization': f'Basic {auth_b64}'
+    })
+    
+    # Ensure the TestRail URL doesn't end with a slash
+    if testrail_url.endswith('/'):
+        testrail_url = testrail_url[:-1]
+    
+    try:
+        # Get sections for the project and suite
+        sections_url = f"{testrail_url}/index.php?/api/v2/get_sections/{project_id}&suite_id={suite_id}"
+        response = session.get(sections_url)
+        response.raise_for_status()
+        
+        sections = response.json()
+        print(f"Found {len(sections)} sections in TestRail")
+        
+        # Print section information for debugging
+        for section in sections:
+            print(f"Section ID: {section.get('id')}, Name: {section.get('name')}")
+        
+        return sections
+    except requests.exceptions.RequestException as e:
+        print(f"Error getting TestRail sections: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text}")
+        return []
+
+
+def create_default_section(testrail_url, testrail_user, testrail_api_key, project_id, suite_id):
+    """
+    Create a default section in TestRail if none exists
+    
+    Args:
+        testrail_url: URL of your TestRail instance
+        testrail_user: TestRail username/email
+        testrail_api_key: TestRail API key
+        project_id: TestRail project ID
+        suite_id: TestRail test suite ID
+        
+    Returns:
+        Section ID of the created section
+    """
+    # Create a session for TestRail API requests
+    session = requests.Session()
+    
+    # Set up authentication headers
+    auth_str = f"{testrail_user}:{testrail_api_key}"
+    auth_bytes = auth_str.encode('ascii')
+    auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+    
+    session.headers.update({
+        'Content-Type': 'application/json',
+        'Authorization': f'Basic {auth_b64}'
+    })
+    
+    # Ensure the TestRail URL doesn't end with a slash
+    if testrail_url.endswith('/'):
+        testrail_url = testrail_url[:-1]
+    
+    try:
+        # Create a new section
+        section_url = f"{testrail_url}/index.php?/api/v2/add_section/{project_id}"
+        data = {
+            "name": "Automated Test Cases",
+            "suite_id": suite_id,
+            "description": "Test cases generated automatically from code changes"
+        }
+        
+        response = session.post(section_url, json=data)
+        response.raise_for_status()
+        
+        section = response.json()
+        section_id = section.get('id')
+        print(f"Created new section with ID: {section_id}")
+        
+        return section_id
+    except requests.exceptions.RequestException as e:
+        print(f"Error creating TestRail section: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text}")
+        return None
+
+
 def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_key, project_id, suite_id):
     """
     Create test cases in TestRail
@@ -356,15 +506,62 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
         print("No test cases to create")
         return
     
+    # Create a session for TestRail API requests
     session = requests.Session()
-    session.auth = (testrail_user, testrail_api_key)
-    session.headers.update({'Content-Type': 'application/json'})
+    
+    # Set up authentication headers
+    # TestRail API uses Basic Authentication with username and API key
+    auth_str = f"{testrail_user}:{testrail_api_key}"
+    auth_bytes = auth_str.encode('ascii')
+    auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+    
+    session.headers.update({
+        'Content-Type': 'application/json',
+        'Authorization': f'Basic {auth_b64}'
+    })
+    
+    # Print authentication details for debugging (mask the API key)
+    masked_api_key = testrail_api_key[:4] + '*' * (len(testrail_api_key) - 8) + testrail_api_key[-4:]
+    print(f"Using TestRail authentication - User: {testrail_user}, API Key: {masked_api_key}")
     
     # Priority mapping
     priority_map = {"Critical": 1, "High": 2, "Medium": 3, "Low": 4}
     
     created_count = 0
     failed_count = 0
+    
+    # Ensure the TestRail URL doesn't end with a slash
+    if testrail_url.endswith('/'):
+        testrail_url = testrail_url[:-1]
+    
+    # Test the authentication with a simple API call
+    try:
+        print("Testing TestRail API connection...")
+        test_url = f"{testrail_url}/index.php?/api/v2/get_projects"
+        test_response = session.get(test_url)
+        test_response.raise_for_status()
+        print("TestRail API connection successful")
+    except requests.exceptions.RequestException as e:
+        print(f"Error connecting to TestRail API: {e}")
+        if hasattr(e, 'response') and e.response:
+            print(f"Response status: {e.response.status_code}")
+            print(f"Response body: {e.response.text}")
+        sys.exit(1)
+    
+    # Get available sections or create a default one
+    sections = get_testrail_sections(testrail_url, testrail_user, testrail_api_key, project_id, suite_id)
+    
+    section_id = None
+    if sections:
+        # Use the first section if available
+        section_id = sections[0].get('id')
+        print(f"Using existing section with ID: {section_id}")
+    else:
+        # Create a default section if none exists
+        section_id = create_default_section(testrail_url, testrail_user, testrail_api_key, project_id, suite_id)
+        if not section_id:
+            print("Failed to create a section. Cannot add test cases.")
+            sys.exit(1)
     
     for test_case in test_cases:
         try:
@@ -385,7 +582,8 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
                 "priority_id": priority_id,
                 "custom_preconds": preconditions,
                 "custom_steps": steps,
-                "custom_expected": expected_results
+                "custom_expected": expected_results,
+                "section_id": section_id  # Add section_id to the request
             }
             
             # Add optional fields if present
@@ -395,17 +593,21 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
                 data["estimate"] = test_case["estimate"]
             
             # Send request to TestRail API
-            response = session.post(
-                f"{testrail_url}/index.php?/api/v2/add_case/{suite_id}",
-                json=data
-            )
+            api_url = f"{testrail_url}/index.php?/api/v2/add_case/{section_id}"
+            print(f"Sending request to TestRail API: {api_url}")
+            print(f"Request data: {json.dumps(data, indent=2)}")
             
-            if response.status_code == 200:
-                created_count += 1
-                print(f"Created test case: {title}")
-            else:
-                failed_count += 1
-                print(f"Failed to create test case: {response.text}")
+            response = session.post(api_url, json=data)
+            response.raise_for_status()  # Raise exception for 4XX/5XX responses
+            
+            created_count += 1
+            print(f"Created test case: {title}")
+        except requests.exceptions.RequestException as e:
+            failed_count += 1
+            print(f"Failed to create test case: {e}")
+            if hasattr(e, 'response') and e.response:
+                print(f"Response status: {e.response.status_code}")
+                print(f"Response body: {e.response.text}")
         except Exception as e:
             failed_count += 1
             print(f"Error creating test case: {e}")
