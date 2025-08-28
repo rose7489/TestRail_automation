@@ -108,9 +108,35 @@ def generate_test_cases(code_diff, api_key, project_id="19daaa87-9354-4516-8673-
     }
     
     try:
+        print("Sending request to watsonx.ai API...")
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()  # Raise exception for 4XX/5XX responses
-        return response.json()
+        
+        # Get the response JSON
+        response_json = response.json()
+        
+        # Log the raw response
+        print("\n--- watsonx.ai API Response ---")
+        if "results" in response_json and len(response_json["results"]) > 0:
+            generated_text = response_json["results"][0].get("generated_text", "")
+            print(f"Generated text (first 500 chars):\n{generated_text[:500]}...")
+            
+            # Save the full response to a file for debugging
+            log_dir = "logs"
+            os.makedirs(log_dir, exist_ok=True)
+            timestamp = os.path.basename(__file__).replace('.py', '') + "_" + \
+                       str(int(os.path.getmtime(__file__)))
+            log_file = os.path.join(log_dir, f"watsonx_response_{timestamp}.json")
+            
+            with open(log_file, 'w') as f:
+                json.dump(response_json, f, indent=2)
+            print(f"Full response saved to: {log_file}")
+        else:
+            print("Warning: Unexpected response format")
+            print(f"Raw response: {json.dumps(response_json, indent=2)[:500]}...")
+        print("-------------------------------\n")
+        
+        return response_json
     except requests.exceptions.RequestException as e:
         print(f"Error calling watsonx.ai API: {e}")
         if hasattr(e, 'response') and e.response:
