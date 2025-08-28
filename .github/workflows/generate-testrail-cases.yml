@@ -31,15 +31,29 @@ jobs:
           PROJECT_ID: ${{ secrets.TESTRAIL_PROJECT_ID }}
           SUITE_ID: ${{ secrets.TESTRAIL_SUITE_ID }}
         run: |
+          # Verify that all required secrets are set
+          if [ -z "$WATSONX_API_KEY" ]; then
+            echo "Error: WATSONX_API_KEY secret is not set"
+            exit 1
+          fi
+          if [ -z "$TESTRAIL_URL" ] || [ -z "$TESTRAIL_USER" ] || [ -z "$TESTRAIL_API_KEY" ]; then
+            echo "Error: One or more TestRail secrets are not set"
+            exit 1
+          fi
+          if [ -z "$PROJECT_ID" ] || [ -z "$SUITE_ID" ]; then
+            echo "Error: TestRail PROJECT_ID or SUITE_ID is not set"
+            exit 1
+          fi
+          
           python scripts/generate_testrail_cases.py \
             --repo-path $GITHUB_WORKSPACE \
             --base-sha ${{ github.event.pull_request.base.sha }} \
             --head-sha ${{ github.event.pull_request.head.sha }} \
-            --watsonx-api-key $WATSONX_API_KEY \
-            --testrail-url $TESTRAIL_URL \
-            --testrail-user $TESTRAIL_USER \
-            --testrail-api-key $TESTRAIL_API_KEY \
-            --project-id $PROJECT_ID \
-            --suite-id $SUITE_ID
+            --watsonx-api-key "$WATSONX_API_KEY" \
+            --testrail-url "$TESTRAIL_URL" \
+            --testrail-user "$TESTRAIL_USER" \
+            --testrail-api-key "$TESTRAIL_API_KEY" \
+            --project-id "$PROJECT_ID" \
+            --suite-id "$SUITE_ID"
 
 # Made with Bob
