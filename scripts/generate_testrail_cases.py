@@ -418,12 +418,26 @@ def get_testrail_sections(testrail_url, testrail_user, testrail_api_key, project
         response = session.get(sections_url)
         response.raise_for_status()
         
-        sections = response.json()
+        # Parse the response
+        response_data = response.json()
+        
+        # Check if the response is a list or has a specific structure
+        if isinstance(response_data, list):
+            sections = response_data
+        elif isinstance(response_data, dict) and "sections" in response_data:
+            sections = response_data["sections"]
+        else:
+            print(f"Unexpected response format: {response_data}")
+            sections = []
+        
         print(f"Found {len(sections)} sections in TestRail")
         
         # Print section information for debugging
         for section in sections:
-            print(f"Section ID: {section.get('id')}, Name: {section.get('name')}")
+            if isinstance(section, dict):  # Make sure section is a dictionary
+                print(f"Section ID: {section.get('id')}, Name: {section.get('name')}")
+            else:
+                print(f"Unexpected section format: {section}")
         
         return sections
     except requests.exceptions.RequestException as e:
@@ -554,7 +568,7 @@ def create_testrail_cases(test_cases, testrail_url, testrail_user, testrail_api_
     section_id = None
     # Look for a section named "generic"
     for section in sections:
-        if section.get('name') == "generic":
+        if isinstance(section, dict) and section.get('name') == "generic":
             section_id = section.get('id')
             print(f"Found existing 'generic' section with ID: {section_id}")
             break
