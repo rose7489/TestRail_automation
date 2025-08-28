@@ -21,39 +21,40 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install requests
-      
-      - name: Generate and upload test cases
-        env:
-          WATSONX_API_KEY: ${{ secrets.WATSONX_API_KEY }}
-          TESTRAIL_URL: ${{ secrets.TESTRAIL_URL }}
-          TESTRAIL_USER: ${{ secrets.TESTRAIL_USER }}
-          TESTRAIL_API_KEY: ${{ secrets.TESTRAIL_API_KEY }}
-          PROJECT_ID: ${{ secrets.TESTRAIL_PROJECT_ID }}
-          SUITE_ID: ${{ secrets.TESTRAIL_SUITE_ID }}
+          
+      - name: Verify script and environment
         run: |
-          # Verify that all required secrets are set
-          if [ -z "$WATSONX_API_KEY" ]; then
-            echo "Error: WATSONX_API_KEY secret is not set"
-            exit 1
-          fi
-          if [ -z "$TESTRAIL_URL" ] || [ -z "$TESTRAIL_USER" ] || [ -z "$TESTRAIL_API_KEY" ]; then
-            echo "Error: One or more TestRail secrets are not set"
-            exit 1
-          fi
-          if [ -z "$PROJECT_ID" ] || [ -z "$SUITE_ID" ]; then
-            echo "Error: TestRail PROJECT_ID or SUITE_ID is not set"
+          # Check if script exists and is readable
+          if [ ! -f "scripts/generate_testrail_cases.py" ]; then
+            echo "Error: scripts/generate_testrail_cases.py not found"
             exit 1
           fi
           
+          # Make script executable
+          chmod +x scripts/generate_testrail_cases.py
+          
+          # Verify Python can parse the script
+          python -m py_compile scripts/generate_testrail_cases.py
+          
+          # Print Python version for debugging
+          python --version
+      
+      - name: Generate and upload test cases
+        # Pass secrets directly to the command instead of using environment variables
+        run: |
+          # Debug: Check if secrets are directly accessible
+          echo "Checking if secrets are available through GitHub secrets context..."
+          
+          # Pass secrets directly from GitHub secrets context
           python scripts/generate_testrail_cases.py \
             --repo-path $GITHUB_WORKSPACE \
             --base-sha ${{ github.event.pull_request.base.sha }} \
             --head-sha ${{ github.event.pull_request.head.sha }} \
-            --watsonx-api-key "$WATSONX_API_KEY" \
-            --testrail-url "$TESTRAIL_URL" \
-            --testrail-user "$TESTRAIL_USER" \
-            --testrail-api-key "$TESTRAIL_API_KEY" \
-            --project-id "$PROJECT_ID" \
-            --suite-id "$SUITE_ID"
+            --watsonx-api-key "${{ secrets.WATSONX_API_KEY }}" \
+            --testrail-url "${{ secrets.TESTRAIL_URL }}" \
+            --testrail-user "${{ secrets.TESTRAIL_USER }}" \
+            --testrail-api-key "${{ secrets.TESTRAIL_API_KEY }}" \
+            --project-id "${{ secrets.TESTRAIL_PROJECT_ID }}" \
+            --suite-id "${{ secrets.TESTRAIL_SUITE_ID }}"
 
 # Made with Bob
